@@ -12,7 +12,6 @@ const double eatTimeMax = 25.0;
 const double cleanTimeMin = 1.0;
 const double cleanTimeMax = 2.0;
 
-int cnt = 0;
 
 Queue waiterQueue("Order Queue");
 Queue cookQueue("Food Queue");
@@ -26,7 +25,6 @@ class Customer : public Process{
     bool EatOnSpot;
 
     void Behavior(){
-        cnt++;
         order_food();
     }
 
@@ -49,7 +47,7 @@ class Customer : public Process{
 
 
     void order_food(){
-        if(Waiter.Busy() && Helper.Busy()){
+        while(Waiter.Busy() && Helper.Busy()){
             waiterQueue.Insert(this);
             this->Passivate();
         }
@@ -69,7 +67,7 @@ class Customer : public Process{
 
 
     void wait_for_food(){
-        if(Cook.Busy() && Helper.Busy()){
+        while(Cook.Busy() && Helper.Busy()){
             cookQueue.Insert(this);
             this->Passivate();
         }
@@ -102,7 +100,7 @@ class Customer : public Process{
 
 
     void take_Order(){
-        if(Waiter.Busy() && Helper.Busy()){
+        while(Waiter.Busy() && Helper.Busy()){
             waiterQueue.Insert(this);
             this->Passivate();
         }
@@ -115,6 +113,7 @@ class Customer : public Process{
             else{
                 Wait(takeOrderToGo);
             }
+            Waiter.Release(this);
             ActivateQueue(waiterQueue);
         }
 
@@ -126,6 +125,7 @@ class Customer : public Process{
             else{
                 Wait(takeOrderToGo);
             }
+            Helper.Release(this);
             ActivateQueue(waiterQueue);
         }
 
@@ -145,7 +145,7 @@ class Customer : public Process{
 
 
     void clean(){
-        if(Waiter.Busy() && Helper.Busy()){
+        while(Waiter.Busy() && Helper.Busy()){
             waiterQueue.Insert(this);
             this->Passivate();
         }
@@ -185,6 +185,5 @@ int main(){
     Waiter.Output();
     Helper.Output();
 
-    printf("Total customers served: %d\n", cnt);
     return 0;
 }
