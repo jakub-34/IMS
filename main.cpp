@@ -101,7 +101,7 @@ class Customer : public Process{
 
     void take_Order(){
         while(Waiter.Busy() && Helper.Busy()){
-            waiterQueue.Insert(this);
+            waiterQueue.InsFirst(this);
             this->Passivate();
         }
 
@@ -146,7 +146,7 @@ class Customer : public Process{
 
     void clean(){
         while(Waiter.Busy() && Helper.Busy()){
-            waiterQueue.Insert(this);
+            waiterQueue.InsFirst(this);
             this->Passivate();
         }
 
@@ -167,7 +167,7 @@ class Customer : public Process{
 class CustomerGenerator : public Event{
     void Behavior(){
         (new Customer)->Activate();
-        Activate(Time + 2.0);
+        Activate(Time + Uniform(arrivalMin, arrivalMax));
     }
 };
 
