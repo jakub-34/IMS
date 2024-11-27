@@ -1,74 +1,190 @@
 #include "simlib.h"
 
 
-// Define parameters
-Parameter arrivalRateMin(8.0), arrivalRateMax(18.0);
-Parameter orderTimeMin(1.0), orderTimeMax(5.0);
-Parameter cookTimeMin(6.0), cookTimeMax(8.0);
-Parameter serveOnSite(2.0);
-Parameter serveToGo(1.0);
-Parameter eatTimeMin(15.0), eatTimeMax(25.0);
-Parameter cleanTimeMin(1.0), cleanTimeMax(2.0);
-Parameter leaveTimeMin(15.0), leaveTimeMax(20.0);
+const double arrivalMin = 8.0;
+const double arrivalMax = 18.0;
+const double orderMin = 1.0;
+const double orderMax = 5.0;
+const double takeOrderOnSite = 2.0;
+const double takeOrderToGo = 1.0;
+const double eatTimeMin = 15.0;
+const double eatTimeMax = 25.0;
+const double cleanTimeMin = 1.0;
+const double cleanTimeMax = 2.0;
+
+int cnt = 0;
+
+Queue waiterQueue("Order Queue");
+Queue cookQueue("Food Queue");
 
 Facility Waiter("Waiter");
 Facility Helper("Helper");
+Facility Cook("Cook");
 
 
-class Customer : public Process {
-    void Behavior() {
-        Print("%f: Customer arrived\n", T.Value());
+class Customer : public Process{
+    bool EatOnSpot;
 
-        double leaveTime = T.Value() + Uniform(leaveTimeMin.Value(), leaveTimeMax.Value());
-        Activate(leaveTime);
+    void Behavior(){
+        cnt++;
+        order_food();
+    }
 
-        // Order food
-        while(T.Value() < leaveTime){
-            // Attempt to use the waiter
-            if(!Waiter.Busy()){ // Waiter is available
-                Waiter.Seize(this);
-                Print("%f: Customer is ordering with the Waiter\n", T.Value());
-                Wait(Uniform(orderTimeMin.Value(), orderTimeMax.Value()));
-                Print("%f: Customer finished ordering\n", T.Value());
-                Waiter.Release(this);
-                return;
-            }
-            else if(!Helper.Busy()){ // Use Helper if Waiter is busy
-                Helper.Seize(this);
-                Print("%f: Customer is ordering with the Helper\n", T.Value());
-                Wait(Uniform(orderTimeMin.Value(), orderTimeMax.Value()));
-                Print("%f: Customer finished ordering\n", T.Value());
-                Helper.Release(this);
-                return;
-            }
-            else{
-                Passivate();
-            }
+
+    void ActivateQueue(Queue &q){
+        if(q.Empty()){
+            return;
         }
 
-        // If customer is not served within the time limit, they leave
-        Print("%f: Customer waited too long and left\n", T.Value());
+        Customer *c = (Customer *) q.GetFirst();
+        c->Activate();
     }
+
+
+    void ProcessFacility(Facility &f, const double start, const double end){
+        f.Seize(this);
+        Wait(Uniform(start, end));
+        f.Release(this);
+    }
+
+
+    void order_food(){
+        if(Waiter.Busy() && Helper.Busy()){
+            waiterQueue.Insert(this);
+            this->Passivate();
+        }
+
+        if(!Waiter.Busy()){
+            ProcessFacility(Waiter, orderMin, orderMax);
+            ActivateQueue(waiterQueue);
+        }
+
+        else if(!Helper.Busy()){
+            ProcessFacility(Helper, orderMin, orderMax);
+            ActivateQueue(waiterQueue);
+        }
+
+        wait_for_food();
+    }
+
+
+    void wait_for_food(){
+        if(Cook.Busy() && Helper.Busy()){
+            cookQueue.Insert(this);
+            this->Passivate();
+        }
+
+        if(!Cook.Busy()){
+            ProcessFacility(Cook, orderMin, orderMax);
+            ActivateQueue(cookQueue);
+        }
+
+        else if(!Helper.Busy()){
+            ProcessFacility(Helper, orderMin, orderMax);
+            ActivateQueue(cookQueue);
+        }
+
+        decide_where_to_eat();
+
+        take_Order();
+    }
+
+
+    void decide_where_to_eat(){
+        if(Random() <= 0.63){
+            EatOnSpot = true;
+        }
+
+        else{
+            EatOnSpot = false;
+        }
+    }
+
+
+    void take_Order(){
+        if(Waiter.Busy() && Helper.Busy()){
+            waiterQueue.Insert(this);
+            this->Passivate();
+        }
+
+        if(!Waiter.Busy()){
+            Waiter.Seize(this);
+            if(EatOnSpot){
+                Wait(takeOrderOnSite);
+            }
+            else{
+                Wait(takeOrderToGo);
+            }
+            ActivateQueue(waiterQueue);
+        }
+
+        else if(!Helper.Busy()){
+            Helper.Seize(this);
+            if(EatOnSpot){
+                Wait(takeOrderOnSite);
+            }
+            else{
+                Wait(takeOrderToGo);
+            }
+            ActivateQueue(waiterQueue);
+        }
+
+        if(EatOnSpot){
+            eat();
+        }
+        else{
+            return;
+        }
+    }
+
+
+    void eat(){
+        Wait(Uniform(eatTimeMin, eatTimeMax));
+        clean();
+    }
+
+
+    void clean(){
+        if(Waiter.Busy() && Helper.Busy()){
+            waiterQueue.Insert(this);
+            this->Passivate();
+        }
+
+        if(!Waiter.Busy()){
+            ProcessFacility(Waiter, cleanTimeMin, cleanTimeMax);
+            ActivateQueue(waiterQueue);
+        }
+
+        else if(!Helper.Busy()){
+            ProcessFacility(Helper, cleanTimeMin, cleanTimeMax);
+            ActivateQueue(waiterQueue);
+        }
+    }
+    
 };
 
 
-class Generator : public Event {
-    void Behavior() {
-        // Generate a new customer
+class CustomerGenerator : public Event{
+    void Behavior(){
         (new Customer)->Activate();
-        // Schedule the next customer
-        Activate(T.Value() + Uniform(arrivalRateMin.Value(), arrivalRateMax.Value()));
+        Activate(Time + 2.0);
     }
 };
 
 
 int main(){
-    SetOutput("simulation_output.txt");
-    Init(0.0, 480.0);
+    Init(0, 480);
 
-    (new Generator)->Activate(0.0);
+    (new CustomerGenerator)->Activate();
 
     Run();
 
+    cookQueue.Output();
+    waiterQueue.Output();
+    Cook.Output();
+    Waiter.Output();
+    Helper.Output();
+
+    printf("Total customers served: %d\n", cnt);
     return 0;
 }
