@@ -11,6 +11,7 @@ const double eatTimeMin = 15.0;
 const double eatTimeMax = 25.0;
 const double cleanTimeMin = 1.0;
 const double cleanTimeMax = 2.0;
+const double onSpotProb = 0.63;
 
 
 Queue waiterQueue("Order Queue");
@@ -89,7 +90,7 @@ class Customer : public Process{
 
 
     void decide_where_to_eat(){
-        if(Random() <= 0.63){
+        if(Random() <= onSpotProb){
             EatOnSpot = true;
         }
 
@@ -160,7 +161,6 @@ class Customer : public Process{
             ActivateQueue(waiterQueue);
         }
     }
-    
 };
 
 
@@ -173,7 +173,7 @@ class CustomerGenerator : public Event{
 
 
 int main(){
-    Init(0, 480);
+    Init(0, 720);
 
     (new CustomerGenerator)->Activate();
 
